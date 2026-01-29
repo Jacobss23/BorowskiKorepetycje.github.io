@@ -24,12 +24,12 @@
         }
       }
     </script>
-    <!-- Polyfill for process.env to prevent crashes in browser environment -->
+    <!-- Polyfill for process.env to prevent crashes with libraries expecting node environment -->
     <script>
       window.process = {
         env: {
           NODE_ENV: 'production',
-          API_KEY: '' // Użytkownik musi tutaj wpisać klucz lub skonfigurować to inaczej
+          API_KEY: '' // Tutaj możesz wpisać klucz API jeśli chcesz go hardcodować, ale bezpieczniej jest używać .env lokalnie
         }
       };
     </script>
@@ -38,24 +38,11 @@
         font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         background-color: #000000;
         color: #f3f4f6;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
       }
-      /* Custom scrollbar for dark mode */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #18181b; 
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #3f3f46; 
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #52525b; 
-      }
+      ::-webkit-scrollbar { width: 8px; height: 8px; }
+      ::-webkit-scrollbar-track { background: #18181b; }
+      ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: #52525b; }
       
       .glass-panel {
         background: rgba(24, 24, 27, 0.6);
@@ -63,21 +50,21 @@
         -webkit-backdrop-filter: blur(12px);
         border: 1px solid rgba(255, 255, 255, 0.08);
       }
-      
       .glass-input {
         background: rgba(39, 39, 42, 0.5);
         border: 1px solid rgba(255, 255, 255, 0.1);
         color: white;
       }
-      
       .glass-input:focus {
         border-color: #3b82f6;
         outline: none;
         background: rgba(39, 39, 42, 0.8);
       }
     </style>
+    
     <!-- Babel Standalone to compile TSX in browser -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
     <script type="importmap">
 {
   "imports": {
@@ -94,7 +81,7 @@
 </head>
   <body>
     <div id="root"></div>
-    <!-- Load the main logic file with type="text/babel" so browser can execute it -->
+    <!-- Load the monolithic logic file. Using type="text/babel" is crucial for GitHub Pages to compile TSX. -->
     <script type="text/babel" data-type="module" src="./index.tsx"></script>
   </body>
 </html>

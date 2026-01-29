@@ -1,6 +1,668 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
+import { LayoutDashboard, UserCircle, LogOut, BookOpen, GraduationCap, School, ChevronRight, ChevronLeft, Phone, Mail, Lock, Coins, FileText, ExternalLink, ShieldCheck, Check, MessageSquare, Clock, User, Save, Upload, Trash2, Calendar, X, Plus } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import { GoogleGenAI, Type } from "@google/genai";
+
+// ==========================================
+// 1. TYPES
+// ==========================================
+
+export interface Booking {
+  id: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:00
+  clientName: string;
+  clientPhone: string;
+  topic: string;
+  additionalInfo?: string;
+  status: 'pending' | 'confirmed' | 'rejected';
+  createdAt: string;
+}
+
+export interface TopicCategories {
+  primary: string[];
+  highSchool: string[];
+}
+
+export interface PricingItem {
+  title: string;
+  subtitle: string;
+  price: string;
+}
+
+export interface CalendarOverride {
+  date: string; // YYYY-MM-DD
+  type: 'special' | 'unavailable';
+}
+
+export interface TutorProfile {
+  name: string;
+  bio: string;
+  photoUrl?: string;
+  contactEmail: string;
+  contactPhone: string;
+  topics: TopicCategories;
+  pricing: PricingItem[];
+  terms: string;
+  calendarOverrides: CalendarOverride[];
+}
+
+export type View = 'public' | 'public-topics' | 'pricing' | 'admin-dashboard' | 'admin-calendar' | 'admin-profile';
+export type EducationLevel = string;
+
+export interface MathProblem {
+  question: string;
+  answer: string;
+  difficulty: string;
+  stepByStep?: string;
+}
+
+// ==========================================
+// 2. GEMINI SERVICE
+// ==========================================
+
+const apiKey = process.env.API_KEY || '';
+// Safe check for API key presence
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
+
+export const generateMathProblems = async (
+  topic: string,
+  level: EducationLevel,
+  count: number = 3
+): Promise<MathProblem[]> => {
+  if (!ai) { console.warn("API Key missing"); return []; }
+
+  const prompt = `Jesteś doświadczonym nauczycielem matematyki. Wygeneruj ${count} zadań matematycznych z tematu: "${topic}" dla ucznia na poziomie: ${level}.
+  Odpowiedzi muszą być w języku polskim.`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+      },
+    });
+
+    if (response.text) {
+      const cleanText = response.text.replace(/```json/g, '').replace(/```/g, '');
+      return JSON.parse(cleanText) as MathProblem[];
+    }
+    return [];
+  } catch (error) {
+    console.error("Error generating math problems:", error);
+    return [];
+  }
+};
+
+// ==========================================
+// 3. SUB-COMPONENTS
+// ==========================================
+
+// --- LOGIN COMPONENT ---
+interface LoginProps {
+  onLogin: () => void;
+  onCancel: () => void;
+}
+
+const USER_HASH = "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918";
+const PASS_HASH = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9";
+const SECRET_SEQUENCE = [23, 12, 6];
+
+const Login: React.FC<LoginProps> = ({ onLogin, onCancel }) => {
+  const [stage, setStage] = useState<'credentials' | 'pin'>('credentials');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [pinStep, setPinStep] = useState(0);
+  const [currentPinInput, setCurrentPinInput] = useState<number[]>([]);
+  const [gridNumbers, setGridNumbers] = useState<number[]>([]);
+
+  const hashString = async (text: string) => {
+    const msgBuffer = new TextEncoder().encode(text);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  const generateGrid = () => Array.from({ length: 25 }, (_, i) => i + 1);
+
+  useEffect(() => {
+    if (stage === 'pin') setGridNumbers(generateGrid());
+  }, [stage, pinStep]);
+
+  const handleCredentialsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    const uHash = await hashString(username);
+    const pHash = await hashString(password);
+    if (uHash === USER_HASH && pHash === PASS_HASH) {
+      setStage('pin');
+    } else {
+      setError('Błędne dane logowania');
+      setPassword('');
+    }
+  };
+
+  const handlePinClick = (num: number) => {
+    const newSequence = [...currentPinInput, num];
+    setCurrentPinInput(newSequence);
+    const expectedNumber = SECRET_SEQUENCE[pinStep];
+    
+    if (num !== expectedNumber) {
+        setTimeout(() => {
+            setError('Błędna sekwencja. Zaloguj się ponownie.');
+            setStage('credentials');
+            setPinStep(0);
+            setCurrentPinInput([]);
+            setUsername('');
+            setPassword('');
+        }, 300);
+        return;
+    }
+
+    if (pinStep < 2) {
+        setPinStep(prev => prev + 1);
+        setGridNumbers([]); 
+        setTimeout(() => setGridNumbers(generateGrid()), 50);
+    } else {
+        onLogin();
+    }
+  };
+
+  if (stage === 'pin') {
+    return (
+        <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center p-4 z-50">
+            <div className="glass-panel w-full max-w-lg p-8 rounded-2xl relative text-center animate-in zoom-in duration-300">
+                <h2 className="text-2xl font-bold text-white mb-2">Weryfikacja dwuetapowa</h2>
+                <p className="text-gray-400 mb-6">Wybierz poprawną liczbę ({pinStep + 1}/3)</p>
+                <div className="grid grid-cols-5 gap-3">
+                    {gridNumbers.map((num) => (
+                        <button key={num} onClick={() => handlePinClick(num)} className="aspect-square flex items-center justify-center rounded-xl bg-white/5 hover:bg-blue-600 hover:scale-105 border border-white/10 transition-all text-lg font-bold text-white shadow-lg">
+                            {num}
+                        </button>
+                    ))}
+                </div>
+                <button onClick={() => { setStage('credentials'); setPinStep(0); setCurrentPinInput([]); }} className="mt-6 text-sm text-gray-500 hover:text-white">Anuluj</button>
+            </div>
+        </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="glass-panel w-full max-w-sm p-8 rounded-2xl relative animate-in fade-in duration-300">
+        <button onClick={onCancel} className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors">✕</button>
+        <div className="flex justify-center mb-6">
+          <div className="p-4 bg-blue-600/20 rounded-full text-blue-400 border border-blue-500/30 shadow-[0_0_15px_rgba(37,99,235,0.3)]"><Lock size={32} /></div>
+        </div>
+        <h2 className="text-2xl font-bold text-white text-center mb-6">Panel Administratora</h2>
+        <form onSubmit={handleCredentialsSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Login</label>
+            <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} className="w-full px-4 py-3 rounded-xl glass-input" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-400 mb-1">Hasło</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full px-4 py-3 rounded-xl glass-input" />
+          </div>
+          {error && <p className="text-red-400 text-sm text-center bg-red-900/20 py-2 rounded-lg border border-red-500/20 animate-pulse">{error}</p>}
+          <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl transition-all shadow-lg shadow-blue-600/20 mt-2">Dalej</button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// --- PUBLIC CALENDAR COMPONENT ---
+interface PublicCalendarProps {
+  bookings: Booking[];
+  profile: TutorProfile;
+  onAddBooking: (booking: Booking) => void;
+  onOpenPricing: () => void;
+}
+
+const PublicCalendar: React.FC<PublicCalendarProps> = ({ bookings, profile, onAddBooking, onOpenPricing }) => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [step, setStep] = useState<'date' | 'time' | 'form' | 'success'>('date');
+  
+  const [captchaChallenge, setCaptchaChallenge] = useState({ a: 0, b: 0 });
+  const [captchaAnswer, setCaptchaAnswer] = useState('');
+  const [formData, setFormData] = useState({
+    name: '', phone: '', topic: '', customTopic: '', additionalInfo: '', acceptedTerms: false
+  });
+
+  useEffect(() => {
+      if (step === 'form') {
+          setCaptchaChallenge({ a: Math.floor(Math.random() * 5) + 1, b: Math.floor(Math.random() * 5) + 1 });
+          setCaptchaAnswer('');
+      }
+  }, [step]);
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayOfMonth = new Date(year, month, 1).getDay();
+  const startingPadding = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
+
+  const handlePrevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+  const handleNextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+  const getDateStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  const now = new Date();
+  const minDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+  const handleDayClick = (day: number) => {
+    const clickedDate = new Date(year, month, day);
+    if (clickedDate < minDate) return;
+    const dateStr = getDateStr(clickedDate);
+    const override = profile.calendarOverrides?.find(o => o.date === dateStr);
+    if (override?.type === 'unavailable') return;
+    setSelectedDate(clickedDate);
+    setStep('time');
+    setSelectedTime(null);
+  };
+
+  const playSuccessSound = () => {
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.5);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 1.5);
+      osc.start();
+      osc.stop(ctx.currentTime + 1.5);
+    } catch (e) { console.error("Audio failed", e); }
+  };
+
+  const timeSlots = Array.from({ length: 11 }, (_, i) => i + 10);
+  const isSlotTaken = (hour: number) => {
+    if (!selectedDate) return false;
+    const dateStr = getDateStr(selectedDate);
+    const isExactTaken = bookings.some(b => b.date === dateStr && b.time === `${hour}:00` && b.status !== 'rejected');
+    const isPrevTaken = bookings.some(b => b.date === dateStr && b.time === `${hour - 1}:00` && b.status !== 'rejected');
+    const isNextTaken = bookings.some(b => b.date === dateStr && b.time === `${hour + 1}:00` && b.status !== 'rejected');
+    return isExactTaken || isPrevTaken || isNextTaken;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDate || !selectedTime) return;
+    if (parseInt(captchaAnswer) !== captchaChallenge.a + captchaChallenge.b) { alert("Błędny wynik."); return; }
+    if (!formData.acceptedTerms) { alert("Zaakceptuj warunki."); return; }
+    const topicFinal = formData.topic === 'Inne' ? formData.customTopic : formData.topic;
+    const newBooking: Booking = {
+      id: crypto.randomUUID(),
+      date: getDateStr(selectedDate),
+      time: selectedTime,
+      clientName: formData.name,
+      clientPhone: formData.phone,
+      topic: topicFinal,
+      additionalInfo: formData.additionalInfo,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+    onAddBooking(newBooking);
+    playSuccessSound();
+    setStep('success');
+  };
+
+  const monthNames = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"];
+
+  if (step === 'success') {
+    return (
+      <div className="glass-panel p-8 rounded-2xl text-center animate-in fade-in zoom-in duration-500">
+        <div className="w-20 h-20 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center mx-auto mb-6 border border-green-500/30 animate-bounce"><Check size={40} /></div>
+        <h3 className="text-2xl font-bold text-white mb-2">Termin zarezerwowany!</h3>
+        <p className="text-gray-400 mb-6 max-w-sm mx-auto">Potwierdzenie zostanie wysłane na podany numer.</p>
+        <button onClick={() => { setStep('date'); setFormData({ name: '', phone: '', topic: '', customTopic: '', additionalInfo: '', acceptedTerms: false }); setSelectedDate(null); setSelectedTime(null); }} className="px-6 py-2 bg-white text-black font-semibold rounded-xl hover:bg-gray-200 transition-colors">Wróć do kalendarza</button>
+      </div>
+    );
+  }
+
+  if (step === 'form') {
+    return (
+      <div className="glass-panel p-6 rounded-2xl max-w-lg mx-auto animate-in slide-in-from-right duration-300">
+        <header className="mb-6 border-b border-white/10 pb-4">
+            <button onClick={() => setStep('time')} className="text-sm text-gray-400 hover:text-white mb-2">← Wróć</button>
+            <h3 className="text-xl font-bold text-white">Uzupełnij dane</h3>
+            <p className="text-blue-400 text-sm mt-1">{selectedDate?.toLocaleDateString('pl-PL')} • godz. {selectedTime}</p>
+        </header>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div><label className="flex items-center gap-2 text-sm font-medium text-gray-400 mb-1"><User size={14} /> Imię i Nazwisko</label><input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 rounded-xl glass-input" placeholder="np. Anna Nowak" /></div>
+          <div><label className="flex items-center gap-2 text-sm font-medium text-gray-400 mb-1"><Phone size={14} /> Telefon</label><input required type="tel" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full px-4 py-3 rounded-xl glass-input" placeholder="np. 500 123 456" /></div>
+          <div><label className="flex items-center gap-2 text-sm font-medium text-gray-400 mb-1"><BookOpen size={14} /> Temat</label>
+            <select value={formData.topic} onChange={e => setFormData({...formData, topic: e.target.value})} className="w-full px-4 py-3 rounded-xl glass-input appearance-none mb-2">
+              <option value="" className="bg-gray-900">-- Wybierz temat --</option>
+              <optgroup label="Liceum" className="bg-gray-900">{profile.topics.highSchool.map(t => <option key={t} value={t}>{t}</option>)}</optgroup>
+              <optgroup label="Podstawowa" className="bg-gray-900">{profile.topics.primary.map(t => <option key={t} value={t}>{t}</option>)}</optgroup>
+              <option value="Inne" className="bg-gray-900">Inne</option>
+            </select>
+            {formData.topic === 'Inne' && <input required type="text" value={formData.customTopic} onChange={e => setFormData({...formData, customTopic: e.target.value})} className="w-full px-4 py-3 rounded-xl glass-input animate-in fade-in" placeholder="Jaki to temat?" />}
+          </div>
+          <div><label className="flex items-center gap-2 text-sm font-medium text-gray-400 mb-1"><MessageSquare size={14} /> Wiadomość</label><textarea value={formData.additionalInfo} onChange={e => setFormData({...formData, additionalInfo: e.target.value})} className="w-full px-4 py-3 rounded-xl glass-input resize-none" rows={2} /></div>
+          <div className="flex items-start gap-3 mt-4 p-3 bg-white/5 rounded-xl border border-white/5">
+             <input type="checkbox" id="terms" required checked={formData.acceptedTerms} onChange={e => setFormData({...formData, acceptedTerms: e.target.checked})} className="mt-1 w-5 h-5 rounded border-gray-600 text-blue-600 bg-gray-700" />
+             <label htmlFor="terms" className="text-sm text-gray-400">Zapoznałem/am się z <button type="button" onClick={onOpenPricing} className="text-blue-400 underline">Cennikiem</button>.</label>
+          </div>
+          <div className="p-4 bg-white/5 rounded-xl border border-white/5 flex flex-col gap-2">
+            <div className="flex items-center gap-2 text-sm text-gray-400"><ShieldCheck size={16} /> Potwierdź, że nie jesteś robotem:</div>
+            <div className="flex gap-2">
+                <div className="px-3 py-3 rounded-xl bg-black/40 text-gray-300 font-mono w-20 text-center select-none">{captchaChallenge.a} + {captchaChallenge.b}</div>
+                <input type="number" required value={captchaAnswer} onChange={e => setCaptchaAnswer(e.target.value)} placeholder="Wynik" className="flex-1 px-4 py-3 rounded-xl glass-input text-center" />
+            </div>
+          </div>
+          <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg transition-all">Zarezerwuj Termin</button>
+        </form>
+      </div>
+    );
+  }
+
+  if (step === 'time') {
+    return (
+      <div className="glass-panel p-6 rounded-2xl max-w-lg mx-auto animate-in slide-in-from-right duration-300">
+        <header className="mb-6 flex justify-between items-center">
+             <button onClick={() => setStep('date')} className="text-sm text-gray-400 hover:text-white">← Kalendarz</button>
+             <h3 className="text-xl font-bold text-white text-right">{selectedDate?.toLocaleDateString('pl-PL', { day: 'numeric', month: 'long' })}</h3>
+        </header>
+        <p className="text-center text-gray-400 mb-6">Wybierz godzinę rozpoczęcia:</p>
+        <div className="grid grid-cols-3 gap-3">
+          {timeSlots.map(hour => {
+            const taken = isSlotTaken(hour);
+            return (
+              <button key={hour} disabled={taken} onClick={() => { setSelectedTime(`${hour}:00`); setStep('form'); }} className={`py-3 rounded-xl border transition-all flex items-center justify-center gap-2 ${taken ? 'border-white/5 bg-white/5 text-gray-600 cursor-not-allowed line-through' : 'border-white/20 bg-white/5 hover:bg-blue-600 hover:border-blue-500 text-white'}`}><Clock size={16} />{hour}:00</button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass-panel p-4 md:p-8 rounded-3xl select-none">
+      <div className="flex justify-between items-center mb-8">
+        <button onClick={handlePrevMonth} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white"><ChevronLeft size={24} /></button>
+        <h2 className="text-2xl font-bold text-white capitalize">{monthNames[month]} <span className="text-gray-500">{year}</span></h2>
+        <button onClick={handleNextMonth} className="p-2 hover:bg-white/10 rounded-full transition-colors text-white"><ChevronRight size={24} /></button>
+      </div>
+      <div className="grid grid-cols-7 mb-4 text-center">{['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'So', 'Nd'].map(d => (<div key={d} className="text-xs font-semibold text-gray-500 uppercase tracking-wider py-2">{d}</div>))}</div>
+      <div className="grid grid-cols-7 gap-2 md:gap-4">
+        {Array.from({ length: startingPadding }).map((_, i) => (<div key={`pad-${i}`} />))}
+        {Array.from({ length: daysInMonth }).map((_, i) => {
+          const day = i + 1;
+          const dateObj = new Date(year, month, day);
+          const dateStr = getDateStr(dateObj);
+          const isTooSoon = dateObj < minDate;
+          const override = profile.calendarOverrides?.find(o => o.date === dateStr);
+          const hasBookings = bookings.some(b => b.date === dateStr && b.status !== 'rejected');
+          const isSpecial = override?.type === 'special';
+          const isUnavailable = override?.type === 'unavailable' || isTooSoon;
+          let stateClasses = "text-gray-200 bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/20 hover:scale-105";
+          if (isUnavailable) stateClasses = "text-gray-700 bg-transparent border-transparent cursor-not-allowed";
+          else if (isSpecial) stateClasses = "bg-orange-500/20 text-orange-200 border-orange-500/50 hover:bg-orange-500/30";
+          else if (hasBookings) stateClasses = "bg-blue-900/20 text-blue-100 border-blue-500/20 hover:bg-blue-900/30";
+
+          return (
+            <button key={day} disabled={isUnavailable} onClick={() => handleDayClick(day)} className={`aspect-square rounded-2xl flex flex-col items-center justify-center relative transition-all duration-200 border ${stateClasses}`}>
+              <span className={`text-sm md:text-lg font-medium`}>{day}</span>
+              <div className="flex gap-0.5 mt-1 h-1">
+                 {hasBookings && <div className="w-1 h-1 rounded-full bg-blue-400" />}
+                 {isSpecial && <div className="w-1 h-1 rounded-full bg-orange-400" />}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// --- ADMIN DASHBOARD COMPONENT ---
+interface AdminDashboardProps {
+  bookings: Booking[];
+  onUpdateStatus: (id: string, status: 'confirmed' | 'rejected') => void;
+  onDelete: (id: string) => void;
+}
+
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, onUpdateStatus, onDelete }) => {
+  const pending = bookings.filter(b => b.status === 'pending');
+  const upcoming = bookings.filter(b => b.status === 'confirmed').sort((a, b) => new Date(`${a.date}T${a.time}`).getTime() - new Date(`${b.date}T${b.time}`).getTime());
+
+  return (
+    <div className="space-y-8">
+      <header><h2 className="text-3xl font-bold text-white">Panel Rezerwacji</h2></header>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+         <div className="glass-panel p-4 rounded-xl"><p className="text-gray-500 text-xs uppercase font-semibold">Oczekujące</p><p className="text-2xl font-bold text-orange-400">{pending.length}</p></div>
+         <div className="glass-panel p-4 rounded-xl"><p className="text-gray-500 text-xs uppercase font-semibold">Nadchodzące</p><p className="text-2xl font-bold text-green-400">{upcoming.length}</p></div>
+         <div className="glass-panel p-4 rounded-xl"><p className="text-gray-500 text-xs uppercase font-semibold">Wszystkie</p><p className="text-2xl font-bold text-blue-400">{bookings.length}</p></div>
+      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+        <div className="space-y-4">
+          <h3 className="text-xl font-bold text-white flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-orange-500"></div>Nowe Zgłoszenia</h3>
+          {pending.length === 0 ? <p className="text-gray-500 italic">Brak.</p> : pending.map(b => (
+              <div key={b.id} className="glass-panel p-5 rounded-2xl border-l-4 border-l-orange-500 animate-in slide-in-from-left duration-300">
+                <div className="flex justify-between items-start mb-3"><div><h4 className="font-bold text-white text-lg">{b.clientName}</h4><p className="text-sm text-gray-400 flex items-center gap-1"><Phone size={12} /> {b.clientPhone}</p></div><div className="text-right"><p className="text-white font-mono bg-white/10 px-2 py-1 rounded-lg text-sm">{b.date}</p><p className="text-blue-400 font-bold text-lg">{b.time}</p></div></div>
+                <div className="bg-black/20 p-3 rounded-lg mb-4"><p className="text-sm text-gray-300">Temat: {b.topic}</p></div>
+                <div className="flex gap-2">
+                  <button onClick={() => onUpdateStatus(b.id, 'confirmed')} className="flex-1 py-2 bg-green-600/20 text-green-400 border border-green-500/30 rounded-xl flex justify-center items-center gap-2"><Check size={18} /> Potwierdź</button>
+                  <button onClick={() => onUpdateStatus(b.id, 'rejected')} className="flex-1 py-2 bg-red-600/20 text-red-400 border border-red-500/30 rounded-xl flex justify-center items-center gap-2"><X size={18} /> Odrzuć</button>
+                </div>
+              </div>
+            ))}
+        </div>
+        <div className="space-y-4">
+          <h3 className="text-xl font-bold text-white flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-green-500"></div>Zatwierdzone</h3>
+          <div className="glass-panel rounded-2xl overflow-hidden">
+            {upcoming.length === 0 ? <div className="p-8 text-center text-gray-500">Pusto.</div> : upcoming.map((b, idx) => (
+                <div key={b.id} className={`p-4 flex items-center justify-between hover:bg-white/5 ${idx !== upcoming.length -1 ? 'border-b border-white/5' : ''}`}>
+                   <div className="flex items-center gap-4"><div className="bg-blue-500/10 text-blue-400 p-3 rounded-xl border border-blue-500/20 font-bold text-center w-16"><div className="text-xs uppercase">{new Date(b.date).toLocaleString('pl-PL', {month: 'short'})}</div><div className="text-lg">{new Date(b.date).getDate()}</div></div><div><p className="text-white font-medium">{b.clientName}</p><div className="flex items-center gap-3 text-xs text-gray-400 mt-1"><span>{b.time}</span><span>{b.topic}</span></div></div></div>
+                   <button onClick={() => { if(confirm('Usunąć?')) onDelete(b.id); }} className="text-gray-600 hover:text-red-400 p-2"><X size={16} /></button>
+                </div>
+              ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- ADMIN PROFILE COMPONENT ---
+interface AdminProfileProps {
+  profile: TutorProfile;
+  onUpdateProfile: (profile: TutorProfile) => void;
+}
+
+const AdminProfile: React.FC<AdminProfileProps> = ({ profile, onUpdateProfile }) => {
+  const [formData, setFormData] = useState<TutorProfile>(profile);
+  const [newTopic, setNewTopic] = useState('');
+  const [topicCategory, setTopicCategory] = useState<'primary' | 'highSchool'>('highSchool');
+  const [newPriceItem, setNewPriceItem] = useState<PricingItem>({ title: '', subtitle: '', price: '' });
+  const [calDate, setCalDate] = useState(new Date());
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) { const reader = new FileReader(); reader.onloadend = () => setFormData({ ...formData, photoUrl: reader.result as string }); reader.readAsDataURL(file); }
+  };
+  const handleAddTopic = () => { if (newTopic.trim()) { setFormData({ ...formData, topics: { ...formData.topics, [topicCategory]: [...formData.topics[topicCategory], newTopic.trim()] } }); setNewTopic(''); } };
+  const handleRemoveTopic = (cat: 'primary' | 'highSchool', t: string) => setFormData({ ...formData, topics: { ...formData.topics, [cat]: formData.topics[cat].filter(x => x !== t) } });
+  const handleAddPrice = () => { if (newPriceItem.title) { setFormData({ ...formData, pricing: [...formData.pricing, newPriceItem] }); setNewPriceItem({ title: '', subtitle: '', price: '' }); } };
+  const handleRemovePrice = (i: number) => { const n = [...formData.pricing]; n.splice(i, 1); setFormData({ ...formData, pricing: n }); };
+  const getDateStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const toggleDayStatus = (d: string) => {
+      const idx = formData.calendarOverrides.findIndex(o => o.date === d);
+      let n = [...formData.calendarOverrides];
+      if (idx === -1) n.push({ date: d, type: 'special' });
+      else if (n[idx].type === 'special') n[idx].type = 'unavailable';
+      else n.splice(idx, 1);
+      setFormData({ ...formData, calendarOverrides: n });
+  };
+  const getDayStatus = (d: string) => formData.calendarOverrides.find(o => o.date === d)?.type;
+  const handleSave = () => { onUpdateProfile(formData); alert('Zapisano.'); };
+  
+  const year = calDate.getFullYear(); const month = calDate.getMonth(); const daysInMonth = new Date(year, month + 1, 0).getDate(); const firstDay = new Date(year, month, 1).getDay(); const padding = firstDay === 0 ? 6 : firstDay - 1;
+
+  return (
+    <div className="max-w-5xl mx-auto space-y-8 pb-10">
+      <header className="flex justify-between items-end"><div><h2 className="text-3xl font-bold text-white">Profil</h2></div><button onClick={handleSave} className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-xl"><Save size={20} /> Zapisz</button></header>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="space-y-8">
+            <div className="glass-panel p-6 rounded-2xl space-y-6">
+                <div className="flex gap-4 items-start"><div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}><div className="w-20 h-20 rounded-full bg-gray-800 overflow-hidden border-2 border-white/20">{formData.photoUrl ? <img src={formData.photoUrl} className="w-full h-full object-cover" /> : <UserCircle size={40} className="text-gray-600 w-full h-full p-2" />}</div></div><input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" /><div className="flex-1 space-y-3"><input type="text" name="name" value={formData.name} onChange={handleChange} className="w-full px-4 py-4 rounded-xl glass-input text-xl" /><textarea name="bio" value={formData.bio} onChange={handleChange} rows={5} className="w-full px-4 py-4 rounded-xl glass-input text-xl resize-none" /></div></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><input type="text" name="contactPhone" value={formData.contactPhone} onChange={handleChange} className="w-full px-4 py-4 rounded-xl glass-input text-xl" /><input type="text" name="contactEmail" value={formData.contactEmail} onChange={handleChange} className="w-full px-4 py-4 rounded-xl glass-input text-xl" /></div>
+            </div>
+            <div className="glass-panel p-6 rounded-2xl">
+                <h3 className="text-xl font-semibold text-white mb-4">Cennik</h3>
+                <div className="space-y-3 mb-4">{formData.pricing.map((item, idx) => (<div key={idx} className="flex justify-between items-center bg-white/5 p-4 rounded-lg"><div className="text-white">{item.title} - {item.price}</div><button onClick={() => handleRemovePrice(idx)}><Trash2 size={20} /></button></div>))}</div>
+                <div className="grid grid-cols-3 gap-3"><input placeholder="Nazwa" value={newPriceItem.title} onChange={e => setNewPriceItem({...newPriceItem, title: e.target.value})} className="col-span-3 px-4 py-4 rounded-xl glass-input" /><input placeholder="Cena" value={newPriceItem.price} onChange={e => setNewPriceItem({...newPriceItem, price: e.target.value})} className="px-4 py-4 rounded-xl glass-input" /></div><button onClick={handleAddPrice} className="w-full mt-4 py-3 bg-white/10 text-white rounded-xl"><Plus size={20} /></button>
+            </div>
+             <div className="glass-panel p-6 rounded-2xl"><h3 className="text-xl font-semibold text-white mb-4">Regulamin</h3><textarea name="terms" value={formData.terms} onChange={handleChange} rows={8} className="w-full px-4 py-4 rounded-xl glass-input resize-none" /></div>
+        </div>
+        <div className="space-y-8">
+            <div className="glass-panel p-6 rounded-2xl">
+                 <div className="flex justify-between items-center mb-4 bg-white/5 p-3 rounded-xl"><button onClick={() => setCalDate(new Date(year, month - 1))}><ChevronLeft size={24}/></button><span className="font-bold capitalize text-xl">{calDate.toLocaleString('pl-PL', { month: 'long', year: 'numeric' })}</span><button onClick={() => setCalDate(new Date(year, month + 1))}><ChevronRight size={24}/></button></div>
+                <div className="grid grid-cols-7 gap-2">{Array.from({ length: padding }).map((_, i) => <div key={`p-${i}`} />)}{Array.from({ length: daysInMonth }).map((_, i) => {
+                        const day = i + 1; const dateObj = new Date(year, month, day); const localDateStr = getDateStr(dateObj); const status = getDayStatus(localDateStr);
+                        let bgClass = "bg-white/5 text-white"; if (status === 'special') bgClass = "bg-orange-500/20 text-orange-400"; if (status === 'unavailable') bgClass = "bg-gray-800 text-gray-600 line-through";
+                        return (<button key={day} onClick={() => toggleDayStatus(localDateStr)} className={`aspect-square rounded-xl flex items-center justify-center text-lg font-medium ${bgClass}`}>{day}</button>);
+                    })}</div>
+            </div>
+            <div className="glass-panel p-6 rounded-2xl flex flex-col">
+            <h3 className="text-xl font-semibold text-white mb-4">Tematy</h3>
+            <div className="mb-4 space-y-3"><div className="flex gap-2"><button onClick={() => setTopicCategory('primary')} className={`flex-1 py-2 px-3 rounded-lg border ${topicCategory === 'primary' ? 'bg-blue-600' : 'bg-gray-800'}`}>Podstawowa</button><button onClick={() => setTopicCategory('highSchool')} className={`flex-1 py-2 px-3 rounded-lg border ${topicCategory === 'highSchool' ? 'bg-blue-600' : 'bg-gray-800'}`}>Liceum</button></div><div className="flex gap-2"><input type="text" value={newTopic} onChange={(e) => setNewTopic(e.target.value)} placeholder="Nowy temat..." className="flex-1 px-4 py-4 rounded-xl glass-input" /><button onClick={handleAddTopic} className="p-3 bg-blue-600 rounded-xl"><Plus size={24} /></button></div></div>
+            <div className="flex-1 overflow-y-auto space-y-2 max-h-[300px]">{formData.topics[topicCategory].map((topic, index) => (<div key={index} className="flex items-center justify-between p-3 bg-white/5 rounded-xl">{topic}<button onClick={() => handleRemoveTopic(topicCategory, topic)}><X size={18} /></button></div>))}</div>
+            </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
+// 4. MAIN APP
+// ==========================================
+
+const App: React.FC = () => {
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [currentView, setCurrentView] = useState<View>('public');
+  
+  const [bookings, setBookings] = useState<Booking[]>(() => {
+    const saved = localStorage.getItem('mathTutor_bookings');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [profile, setProfile] = useState<TutorProfile>(() => {
+    const saved = localStorage.getItem('mathTutor_profile');
+    const defaultPricing = [{ title: 'Szkoła Podstawowa', subtitle: '60 minut', price: '80 PLN' }, { title: 'Liceum / Technikum', subtitle: '60 minut', price: '100 PLN' }, { title: 'Przygotowanie do Matury', subtitle: '90 minut', price: '140 PLN' }];
+    const defaultTerms = `* **Odwoływanie zajęć:** Bezpłatne odwołanie możliwe do 24h przed terminem.\n* **Płatność:** Gotówką lub BLIKiem przed zajęciami.\n* **Spóźnienia:** Czas spóźnienia ucznia odliczany jest od czasu lekcji.`;
+
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return { ...parsed, pricing: parsed.pricing || defaultPricing, terms: parsed.terms || defaultTerms, calendarOverrides: parsed.calendarOverrides || [] };
+    }
+    return {
+      name: 'Jan Kowalski', bio: 'Pasjonat matematyki z 5-letnim doświadczeniem.', photoUrl: '', contactEmail: 'kontakt@mathtutor.pl', contactPhone: '500 000 000',
+      topics: { primary: ['Ułamki', 'Geometria'], highSchool: ['Równania', 'Funkcje'] }, pricing: defaultPricing, terms: defaultTerms, calendarOverrides: []
+    };
+  });
+
+  useEffect(() => { localStorage.setItem('mathTutor_bookings', JSON.stringify(bookings)); }, [bookings]);
+  useEffect(() => { localStorage.setItem('mathTutor_profile', JSON.stringify(profile)); }, [profile]);
+
+  const handleAddBooking = (booking: Booking) => setBookings([...bookings, booking]);
+  const handleUpdateStatus = (id: string, status: 'confirmed' | 'rejected') => setBookings(bookings.map(b => b.id === id ? { ...b, status } : b));
+  const handleDeleteBooking = (id: string) => setBookings(bookings.filter(b => b.id !== id));
+  const handleUpdateProfile = (newProfile: TutorProfile) => setProfile(newProfile);
+
+  // Math Captcha for Main Page
+  const MathCaptchaMain = () => {
+    const [solved, setSolved] = useState(false); const [answer, setAnswer] = useState(''); const [error, setError] = useState(false); const [challenge, setChallenge] = useState({ q: '', a: '' });
+    useEffect(() => { const op = Math.random() > 0.5 ? '+' : '-'; let a, b; if (op === '+') { a = Math.floor(Math.random() * 5) + 1; b = Math.floor(Math.random() * (10 - a)) + 1; } else { a = Math.floor(Math.random() * 9) + 2; b = Math.floor(Math.random() * (a - 1)) + 1; } const res = op === '+' ? a + b : a - b; setChallenge({ q: `${a} ${op} ${b} = ?`, a: res.toString() }); }, []);
+    const checkAnswer = () => { if (answer.trim() === challenge.a) { setSolved(true); setError(false); } else { setError(true); setAnswer(''); } };
+
+    if (solved) return (<div className="animate-in fade-in duration-500 space-y-3 mt-4"><div className="flex items-center gap-3 text-gray-200"><div className="p-2 bg-green-500/20 rounded-lg text-green-400"><Phone size={18} /></div><span className="font-mono text-lg">{profile.contactPhone}</span></div><div className="flex items-center gap-3 text-gray-200"><div className="p-2 bg-blue-500/20 rounded-lg text-blue-400"><Mail size={18} /></div><span className="font-mono text-lg">{profile.contactEmail}</span></div><p className="text-[10px] text-gray-500 mt-2 uppercase tracking-wide">Nie gwarantuję że odpowiem na Messenger!</p></div>);
+    return (<div className="mt-4 p-4 bg-white/5 rounded-xl border border-white/5 hover:bg-white/10 transition-colors"><p className="text-sm text-gray-400 mb-3 flex items-center gap-2"><Lock size={14} /> Rozwiąż zadanie, aby zobaczyć dane:</p><div className="flex gap-2"><div className="px-3 py-2 bg-black/40 rounded-lg text-gray-300 font-mono select-none w-40 text-center">{challenge.q}</div><input type="text" value={answer} onChange={e => setAnswer(e.target.value)} className="w-20 px-3 py-2 rounded-lg glass-input text-center" placeholder="Wynik" /><button onClick={checkAnswer} className="px-4 py-2 bg-blue-600 rounded-lg text-sm">Pokaż</button></div>{error && <p className="text-red-400 text-xs mt-2 animate-pulse">Błędny wynik.</p>}</div>);
+  };
+
+  const PublicView = () => (
+    <div className="max-w-7xl mx-auto px-4 py-8 md:py-12 space-y-12 relative z-10">
+      <section className="text-center space-y-6 animate-in slide-in-from-bottom duration-700">
+         <div className="inline-block p-1 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 mb-4 shadow-lg shadow-purple-500/20"><div className="bg-black rounded-full px-4 py-1 text-sm font-medium text-white">Profesjonalne Korepetycje</div></div>
+         <h1 className="text-5xl md:text-7xl font-bold text-white tracking-tight leading-tight">Zrozum matematykę <br /><span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 animate-gradient">raz a dobrze.</span></h1>
+      </section>
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+        <div className="glass-panel p-8 rounded-3xl relative overflow-hidden animate-in slide-in-from-left duration-700 delay-150"><h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-3"><UserCircle className="text-blue-500" /> O Mnie</h2><div className="flex flex-col md:flex-row gap-6">{profile.photoUrl && (<div className="flex-shrink-0 mx-auto md:mx-0"><img src={profile.photoUrl} alt={profile.name} className="w-32 h-32 md:w-24 md:h-24 rounded-2xl object-cover border-2 border-white/10 shadow-lg" /></div>)}<div className="space-y-4 text-gray-300 leading-relaxed"><p className="font-medium text-white text-lg">{profile.name}</p><p>{profile.bio}</p></div></div></div>
+        <div className="glass-panel p-8 rounded-3xl flex flex-col justify-center items-center text-center space-y-6 relative overflow-hidden group animate-in slide-in-from-right duration-700 delay-150 border-t border-white/10 hover:border-purple-500/30"><div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 to-purple-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" /><div className="p-4 bg-white/5 rounded-full mb-2 group-hover:bg-white/10 transition-colors relative z-10"><BookOpen size={48} className="text-purple-400 group-hover:scale-110 transition-transform duration-300" /></div><h2 className="text-3xl font-bold text-white relative z-10">Co omawiamy?</h2><p className="text-gray-400 max-w-md relative z-10">Sprawdź pełną listę zagadnień.</p><button onClick={() => setCurrentView('public-topics')} className="relative z-10 px-8 py-4 bg-white text-black text-lg font-bold rounded-2xl hover:bg-gray-200 transition-all flex items-center gap-2">Dostępne Tematy <ChevronRight size={20} /></button></div>
+        <div className="glass-panel p-8 rounded-3xl border-t-4 border-t-yellow-500/50 hover:border-t-yellow-400 transition-all duration-300 animate-in slide-in-from-right duration-700 delay-200 flex flex-col justify-between"><div><h2 className="text-2xl font-bold text-white mb-4 flex items-center gap-3"><Coins className="text-yellow-500" /> Cennik i Warunki</h2><div className="space-y-4 mb-6">{profile.pricing.slice(0, 2).map((item, i) => (<div key={i} className="flex justify-between items-end border-b border-white/5 pb-2"><div><span className="text-gray-200 block">{item.title}</span><span className="text-xs text-gray-500">{item.subtitle}</span></div><span className="text-yellow-400 font-bold">{item.price}</span></div>))}{profile.pricing.length > 2 && <p className="text-xs text-gray-500 italic">...i więcej opcji</p>}</div></div><button onClick={() => setCurrentView('pricing')} className="w-full py-3 bg-white/5 hover:bg-white/10 text-white rounded-xl flex items-center justify-center gap-2 transition-colors border border-white/5 group">Zobacz pełny cennik <ExternalLink size={16} /></button></div>
+        <div className="glass-panel p-8 rounded-3xl border-l-4 border-l-green-500/50 hover:border-l-green-400 transition-colors duration-300 animate-in slide-in-from-left duration-700 delay-200"><h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">Kontakt</h2><p className="text-gray-400 text-sm">Masz pytania? Skontaktuj się bezpośrednio.</p><MathCaptchaMain /></div>
+      </section>
+      <section id="booking" className="scroll-mt-8 animate-in fade-in duration-1000 delay-300"><h2 className="text-3xl font-bold text-white text-center mb-8">Zarezerwuj Termin</h2><div className="max-w-4xl mx-auto"><PublicCalendar bookings={bookings} profile={profile} onAddBooking={handleAddBooking} onOpenPricing={() => setCurrentView('pricing')} /></div></section>
+      <footer className="pt-12 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-500"><p>&copy; {new Date().getFullYear()} MathTutor. Wszystkie prawa zastrzeżone.</p><button onClick={() => setShowLogin(true)} className="hover:text-white transition-colors">Panel Administratora</button></footer>
+    </div>
+  );
+
+  const TopicsView = () => (
+    <div className="max-w-6xl mx-auto px-4 py-8 md:py-12 space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex items-center gap-4 mb-8"><button onClick={() => setCurrentView('public')} className="p-2 rounded-full bg-white/5 text-white hover:scale-110"><ChevronLeft className="w-6 h-6" /></button><h1 className="text-4xl font-bold text-white">Dostępne Tematy</h1></div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="glass-panel p-8 rounded-3xl"><div className="flex items-center gap-4 mb-8"><div className="p-3 bg-green-500/20 rounded-2xl text-green-400"><School size={32} /></div><div><h2 className="text-2xl font-bold text-white">Szkoła Podstawowa</h2></div></div><ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">{profile.topics.primary.map(topic => (<li key={topic} className="flex items-center gap-2 text-gray-300 bg-white/5 p-3 rounded-xl border border-white/5"><div className="w-1.5 h-1.5 rounded-full bg-green-500" />{topic}</li>))}</ul></div>
+        <div className="glass-panel p-8 rounded-3xl"><div className="flex items-center gap-4 mb-8"><div className="p-3 bg-blue-500/20 rounded-2xl text-blue-400"><GraduationCap size={32} /></div><div><h2 className="text-2xl font-bold text-white">Liceum</h2></div></div><ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">{profile.topics.highSchool.map(topic => (<li key={topic} className="flex items-center gap-2 text-gray-300 bg-white/5 p-3 rounded-xl border border-white/5"><div className="w-1.5 h-1.5 rounded-full bg-blue-500" />{topic}</li>))}</ul></div>
+      </div>
+    </div>
+  );
+
+  const PricingView = () => (
+    <div className="max-w-4xl mx-auto px-4 py-8 md:py-12 space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="flex items-center gap-4 mb-8"><button onClick={() => setCurrentView('public')} className="p-2 rounded-full bg-white/5 text-white hover:scale-110"><ChevronLeft className="w-6 h-6" /></button><h1 className="text-4xl font-bold text-white">Cennik i Warunki</h1></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="glass-panel p-8 rounded-3xl border-t border-white/10"><div className="p-3 bg-yellow-500/20 w-fit rounded-xl text-yellow-400 mb-6"><Coins size={32} /></div><h2 className="text-2xl font-bold text-white mb-6">Cennik Zajęć</h2><div className="space-y-6">{profile.pricing.map((item, idx) => (<div key={idx} className="flex justify-between items-end border-b border-white/5 pb-4 last:border-0"><div><h3 className="text-lg font-medium text-white">{item.title}</h3><p className="text-sm text-gray-400">{item.subtitle}</p></div><div className="text-2xl font-bold text-blue-400">{item.price}</div></div>))}</div></div>
+            <div className="glass-panel p-8 rounded-3xl border-t border-white/10"><div className="p-3 bg-blue-500/20 w-fit rounded-xl text-blue-400 mb-6"><FileText size={32} /></div><h2 className="text-2xl font-bold text-white mb-6">Regulamin i Warunki</h2><div className="text-gray-300 prose prose-invert"><ReactMarkdown>{profile.terms}</ReactMarkdown></div></div>
+        </div>
+        <div className="text-center"><button onClick={() => setCurrentView('public')} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-600/20">Wróć do Rezerwacji</button></div>
+    </div>
+  );
+
+  const AdminView = () => (
+    <div className="flex h-screen overflow-hidden bg-black">
+      <aside className="w-20 md:w-64 flex flex-col border-r border-white/5 bg-zinc-900/50 backdrop-blur-xl z-20">
+         <div className="p-6 flex items-center justify-center md:justify-start gap-3"><div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-600/20">M</div><span className="hidden md:block font-bold text-white">Admin</span></div>
+         <nav className="flex-1 p-4 space-y-2"><button onClick={() => setCurrentView('admin-dashboard')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${currentView === 'admin-dashboard' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}><LayoutDashboard size={20} /> <span className="hidden md:block">Rezerwacje</span></button><button onClick={() => setCurrentView('admin-profile')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 ${currentView === 'admin-profile' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}><UserCircle size={20} /> <span className="hidden md:block">Profil & Treść</span></button></nav>
+         <div className="p-4 border-t border-white/5"><button onClick={() => setIsAdmin(false)} className="w-full flex items-center gap-3 p-3 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors"><LogOut size={20} /> <span className="hidden md:block">Wyloguj</span></button></div>
+      </aside>
+      <main className="flex-1 overflow-auto p-8 relative z-10">
+        <div className="max-w-5xl mx-auto animate-in fade-in duration-300">
+          {currentView === 'admin-dashboard' && <AdminDashboard bookings={bookings} onUpdateStatus={handleUpdateStatus} onDelete={handleDeleteBooking} />}
+          {currentView === 'admin-profile' && <AdminProfile profile={profile} onUpdateProfile={handleUpdateProfile} />}
+        </div>
+      </main>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-black text-gray-100 font-sans selection:bg-blue-500/30 overflow-x-hidden relative">
+       <div className="fixed top-[-20%] left-[-10%] w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[120px] pointer-events-none animate-pulse" style={{ animationDuration: '4s' }} />
+       <div className="fixed bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[100px] pointer-events-none animate-pulse" style={{ animationDuration: '5s', animationDelay: '1s' }} />
+       {isAdmin ? <AdminView /> : (currentView === 'pricing' ? <PricingView /> : currentView === 'public-topics' ? <TopicsView /> : <PublicView />)}
+       {showLogin && <Login onLogin={() => { setIsAdmin(true); setShowLogin(false); setCurrentView('admin-dashboard'); }} onCancel={() => setShowLogin(false)} />}
+    </div>
+  );
+};
+
+// ==========================================
+// 5. BOOTSTRAP
+// ==========================================
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
