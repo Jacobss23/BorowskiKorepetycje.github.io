@@ -24,6 +24,15 @@
         }
       }
     </script>
+    <!-- Polyfill for process.env to prevent crashes in browser environment -->
+    <script>
+      window.process = {
+        env: {
+          NODE_ENV: 'production',
+          API_KEY: '' // Użytkownik musi tutaj wpisać klucz lub skonfigurować to inaczej
+        }
+      };
+    </script>
     <style>
       body {
         font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -67,24 +76,25 @@
         background: rgba(39, 39, 42, 0.8);
       }
     </style>
-  <script type="importmap">
+    <!-- Babel Standalone to compile TSX in browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script type="importmap">
 {
   "imports": {
-    "react/": "https://esm.sh/react@^19.2.4/",
-    "react": "https://esm.sh/react@^19.2.4",
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "lucide-react": "https://esm.sh/lucide-react@0.292.0",
+    "@google/genai": "https://esm.sh/@google/genai@0.1.1",
+    "react-markdown": "https://esm.sh/react-markdown@9.0.1",
     "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
-    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
-    "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
-    "recharts": "https://esm.sh/recharts@^3.7.0"
+    "react/": "https://esm.sh/react@^19.2.4/"
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="./assets/index.tsx"></script>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <!-- Load the main logic file with type="text/babel" so browser can execute it -->
+    <script type="text/babel" data-type="module" src="./index.tsx"></script>
+  </body>
 </html>
