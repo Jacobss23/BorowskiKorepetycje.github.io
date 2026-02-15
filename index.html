@@ -10,6 +10,7 @@
             --glass-border: rgba(255, 255, 255, 0.3);
             --text: #ffffff;
             --text-dim: #dfe6e9;
+            --busy-color: #ff7675;
         }
         body {
             font-family: 'Segoe UI', Roboto, sans-serif;
@@ -51,7 +52,7 @@
         .section-content { display: none; padding: 20px; border-top: 1px solid rgba(255,255,255,0.1); animation: fadeIn 0.5s; }
         .glass-card.open .section-content { display: block; }
 
-        /* Tematy - Grid (Teraz 2 kolumny) */
+        /* Tematy - Grid */
         .topics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
         .topic-col h4 { border-bottom: 1px solid var(--main); padding-bottom: 5px; margin-top: 0; color: var(--main); }
         
@@ -62,10 +63,22 @@
         .nav-btn:hover { background: var(--main); color: #000; }
         .days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; text-align: center; }
         .day-label { font-size: 0.8rem; color: var(--main); }
+        
         .day { height: 60px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; position: relative; background: rgba(0,0,0,0.2); transition: 0.2s; }
         .day-num { position: absolute; top: 4px; right: 6px; font-size: 0.8rem; opacity: 0.7; }
+        
+        /* Statusy Dni */
         .day.special { background: rgba(255, 159, 67, 0.6); border-color: #ff9f43; color: #fff; }
-        .day.busy { background: rgba(45, 52, 54, 0.8); color: #636e72; opacity: 0.5; }
+        
+        /* Dzień zajęty */
+        .day.busy { 
+            background: rgba(255, 118, 117, 0.4); 
+            border-color: var(--busy-color); 
+            color: #fab1a0; 
+            opacity: 0.8;
+            cursor: not-allowed; 
+        }
+        
         .day.partial { background: rgba(9, 132, 227, 0.6); border-color: #74b9ff; cursor: pointer; }
         .day.partial:hover { transform: scale(1.1); background: #0984e3; }
 
@@ -92,10 +105,11 @@
   "desc": "Korepetycje Jakub Borowski",
   "contact": "573 079 017",
   "prices": [
-    "1h [Szkoła podstawowa] - 40zł",
-    "1.5h [Szkoła podstawowa] (90 min) 75zł",
-    "1h [Szkoła ponadpodstawowa] - 70zł",
-    "1.5h [Szkoła ponadpodstawowa] (90 min) 120zł Omówienie całego arkusza z egzaminu ósmoklasisty - 110zł",
+    "1h (90 min) [Szkoła podstawowa] - 40zł",
+    "1.5h (90 min) [Szkoła podstawowa] (90 min) 75zł",
+    "1h (90 min) [Szkoła ponadpodstawowa] - 70zł",
+    "1.5h (90 min) [Szkoła ponadpodstawowa]  - 120zł",
+    "Omówienie całego arkusza z egzaminu ósmoklasisty z poprzednich lat - 110zł",
     "Wykonanie zadania domowego z opisowym wytłumaczeniem - 25zł (bez spotkania online)"
   ],
   "rules": [
@@ -139,7 +153,24 @@
       "funkcja kwadratowa"
     ]
   },
-  "calendar": {}
+  "calendar": {
+    "2026-02-21": {
+      "type": "busy",
+      "hours": []
+    },
+    "2026-02-19": {
+      "type": "busy",
+      "hours": []
+    },
+    "2026-02-16": {
+      "type": "busy",
+      "hours": []
+    },
+    "2026-02-15": {
+      "type": "busy",
+      "hours": []
+    }
+  }
 }
 </script>
 
@@ -159,9 +190,20 @@
                 <button class="nav-btn" onclick="changeMonth(1)">&gt;</button>
             </div>
             <div class="days-grid" id="calendar-grid"></div>
-            <div style="margin-top:15px; font-size:0.8rem; display:flex; gap:15px; justify-content: center;">
+            
+            <div style="text-align: center; margin-top: 25px; margin-bottom: 10px;">
+                <p style="margin: 0; color: #ff7675; font-weight: bold;">
+                    Korepetycje muszą być umówione minimum 48h przed planowanym terminem
+                </p>
+                <p style="margin: 5px 0 0 0; font-size: 0.75rem; color: var(--text-dim); opacity: 0.8;">
+                    Ale i tak prosze o kontakt może sie uda nam sie coś ustalić ;)
+                </p>
+            </div>
+
+            <div style="margin-top:15px; font-size:0.8rem; display:flex; gap:15px; justify-content: center; flex-wrap: wrap;">
                 <span style="color:#ffa502">■ Wyjątkowy</span>
-                <span style="color:#74b9ff">■ Termin zajęty</span>
+                <span style="color:#ff7675">■ Termin zajęty</span>
+                <span style="color:#74b9ff">■ Częściowo wolny</span>
             </div>
         </div>
     </div>
@@ -247,7 +289,7 @@
         document.getElementById('v-rules').innerHTML = DATA.rules.map(x=>`<li>${x}</li>`).join('');
         document.getElementById('v-about').innerText = DATA.about || "Brak opisu.";
 
-        // Tematy (ZMIANA NA 2 GRUPY)
+        // Tematy
         const t = DATA.topics || {primary:[], secondary:[]};
         document.getElementById('v-topic-prim').innerHTML = (t.primary||[]).map(x=>`<li>${x}</li>`).join('');
         document.getElementById('v-topic-sec').innerHTML = (t.secondary||[]).map(x=>`<li>${x}</li>`).join('');
