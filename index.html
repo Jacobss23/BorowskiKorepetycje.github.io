@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Korepetycje</title>
+    <style>
+        :root {
+            --main: #00d2d3; /* Jasny turkus, dobrze wygląda na ciemnym */
+            --glass-border: rgba(255, 255, 255, 0.3);
+            --text: #ffffff;
+            --text-dim: #dfe6e9;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            /* Ciemne tło gradientowe, żeby glassmorphism był widoczny */
+            background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+            background-attachment: fixed;
+            color: var(--text);
+            min-height: 100vh;
+            padding-bottom: 50px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Styl Glassmorphism */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid var(--glass-border);
+            margin-bottom: 20px;
+            overflow: hidden; /* Ważne dla animacji rozwijania */
+            transition: transform 0.2s;
+        }
+
+        header {
+            text-align: center;
+            padding: 40px 20px;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+            color: var(--main);
+        }
+
+        p { color: var(--text-dim); }
+
+        /* Nagłówki sekcji rozwijanych */
+        .section-header {
+            padding: 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.05);
+            font-weight: bold;
+            font-size: 1.2rem;
+            user-select: none;
+        }
+        .section-header:hover { background: rgba(255,255,255,0.1); }
+        .section-header::after {
+            content: '▼';
+            font-size: 0.8rem;
+            transition: transform 0.3s;
+        }
+        .glass-card.open .section-header::after { transform: rotate(180deg); }
+
+        /* Treść sekcji (domyślnie ukryta) */
+        .section-content {
+            display: none;
+            padding: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            animation: fadeIn 0.5s;
+        }
+        .glass-card.open .section-content { display: block; }
+
+        /* Kalendarz (zawsze otwarty, ale w stylu glass) */
+        .calendar-wrapper { padding: 20px; }
+        .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .nav-btn { background: none; border: 1px solid var(--main); color: var(--main); padding: 5px 15px; border-radius: 20px; cursor: pointer; transition: 0.3s; }
+        .nav-btn:hover { background: var(--main); color: #000; }
+        
+        .days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; text-align: center; }
+        .day-label { font-size: 0.8rem; color: var(--main); padding-bottom: 10px; }
+        
+        .day {
+            height: 60px;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            position: relative;
+            background: rgba(0,0,0,0.2);
+            transition: 0.2s;
+        }
+        .day-num { position: absolute; top: 4px; right: 6px; font-size: 0.8rem; opacity: 0.7; }
+        
+        /* Statusy dni */
+        .day.special { background: rgba(255, 159, 67, 0.6); border-color: #ff9f43; color: #fff; }
+        .day.busy { background: rgba(45, 52, 54, 0.8); color: #636e72; opacity: 0.5; }
+        .day.partial { background: rgba(9, 132, 227, 0.6); border-color: #74b9ff; cursor: pointer; }
+        .day.partial:hover { transform: scale(1.1); background: #0984e3; box-shadow: 0 0 15px var(--main); }
+
+        /* CAPTCHA */
+        .captcha-box { text-align: center; padding: 20px; }
+        .captcha-input { 
+            background: rgba(0,0,0,0.3); border: 1px solid var(--main); 
+            color: white; padding: 10px; border-radius: 8px; width: 60px; text-align: center; font-size: 1.2rem;
+        }
+        .main-btn {
+            background: var(--main); color: #000; border: none; padding: 10px 20px;
+            border-radius: 20px; font-weight: bold; cursor: pointer; margin-top: 10px;
+        }
+
+        /* Modal Info */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); justify-content: center; align-items: center; z-index: 100; }
+        .modal-content { background: #2d3436; padding: 30px; border-radius: 16px; border: 1px solid var(--glass-border); max-width: 350px; text-align: center; color: #fff; }
+        .hour-badge { display: inline-block; padding: 5px 12px; background: var(--main); color: #000; margin: 4px; border-radius: 12px; font-weight: bold; }
+
+        ul { list-style: none; padding: 0; }
+        li { padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        li:last-child { border: none; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+<script id="site-data" type="application/json">
+{
+  "subject": "Matematyka",
+  "desc": "Korepetycje online i stacjonarne. Przygotowanie do egzaminów.",
+  "contact": "123-456-789",
+  "prices": [
+    "1h (60min) - 100 PLN",
+    "Pakiet 5h - 450 PLN"
+  ],
+  "rules": [
+    "Płatność z góry BLIKiem",
+    "Odwołanie zajęć min. 24h wcześniej",
+    "Spóźnienie nie przedłuża lekcji test"
+  ],
+  "calendar": {
+    "2026-02-10": {
+      "type": "busy",
+      "hours": []
+    },
+    "2026-02-26": {
+      "type": "special",
+      "hours": []
+    },
+    "2026-02-25": {
+      "type": "partial",
+      "hours": [
+        11
+      ]
+    }
+  }
+}
+</script>
+<header>
+    <div class="glass-card" style="display:inline-block; padding: 20px 40px;">
+        <h1 id="v-subject">Ładowanie...</h1>
+        <p id="v-desc"></p>
+    </div>
+</header>
+
+<div class="container">
+
+    <div class="glass-card">
+        <div class="calendar-wrapper">
+            <div class="calendar-header">
+                <button class="nav-btn" onclick="changeMonth(-1)">&lt;</button>
+                <h3 id="month-year" style="margin:0"></h3>
+                <button class="nav-btn" onclick="changeMonth(1)">&gt;</button>
+            </div>
+            <div class="days-grid" id="calendar-grid"></div>
+            
+            <div style="margin-top:15px; font-size:0.8rem; display:flex; gap:15px; justify-content: center;">
+                <span style="color:#ffa502">■ Wyjątkowy</span>
+                <span style="color:#74b9ff">■ Termin zajęty</span>
+                <span style="color:#636e72">■ Brak terminów</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-card" id="card-price">
+        <div class="section-header" onclick="toggleCard('card-price')">
+            💰 Cennik
+        </div>
+        <div class="section-content">
+            <ul id="v-prices"></ul>
+        </div>
+    </div>
+    
+    <div class="glass-card" id="card-rules">
+        <div class="section-header" onclick="toggleCard('card-rules')">
+            ⚠️ Warunki współpracy
+        </div>
+        <div class="section-content">
+            <ul id="v-rules"></ul>
+        </div>
+    </div>
+
+    <div class="glass-card">
+        <div class="captcha-box" id="captcha-container">
+            <h3>📞 Kontakt</h3>
+            <p>Rozwiąż zadanie, aby zobaczyć numer:</p>
+            <div style="font-size: 1.5rem; margin: 10px 0; font-weight: bold;">
+                <span id="math-q">A + B = ?</span>
+            </div>
+            <input type="number" id="math-a" class="captcha-input" placeholder="?">
+            <br>
+            <button class="main-btn" onclick="checkCaptcha()">Pokaż numer</button>
+            <p id="captcha-error" style="color: #ff7675; display: none; margin-top:5px;">Błędny wynik!</p>
+        </div>
+        <div class="captcha-box" id="contact-result" style="display: none;">
+            <h3>📞 Zadzwoń:</h3>
+            <a href="#" id="real-phone" style="font-size: 1.5rem; color: var(--main); text-decoration: none; font-weight: bold;"></a>
+        </div>
+    </div>
+
+</div>
+
+<div class="modal" id="infoModal" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal-content">
+        <h3 id="m-date" style="border-bottom:1px solid #555; padding-bottom:10px"></h3>
+        <p>Zajęte godziny (niedostępne):</p>
+        <div id="m-hours"></div>
+        <p style="font-size:0.8rem; color:#ff7675; margin-top:15px">* Pamiętaj o przerwie min. 1h między zajęciami!</p>
+        <button class="main-btn" onclick="document.getElementById('infoModal').style.display='none'">Zamknij</button>
+    </div>
+</div>
+
+<script>
+    // Ładowanie danych z JSON
+    let DATA = {};
+    try {
+        DATA = JSON.parse(document.getElementById('site-data').textContent);
+    } catch(e) { console.error("Błąd danych", e); }
+
+    let currentDate = new Date();
+    let captchaSol = 0;
+
+    function init() {
+        document.getElementById('v-subject').innerText = DATA.subject;
+        document.getElementById('v-desc').innerText = DATA.desc;
+        
+        document.getElementById('v-prices').innerHTML = DATA.prices.map(x => `<li>${x}</li>`).join('');
+        document.getElementById('v-rules').innerHTML = DATA.rules.map(x => `<li>${x}</li>`).join('');
+        
+        renderCalendar();
+        initCaptcha();
+    }
+
+    // --- LOGIKA UI ---
+    function toggleCard(id) {
+        document.getElementById(id).classList.toggle('open');
+    }
+
+    // --- LOGIKA CAPTCHA ---
+    function initCaptcha() {
+        let a, b;
+        // Warunki: A > B, A + B < 10
+        do {
+            a = Math.floor(Math.random() * 9) + 1; // 1-9
+            b = Math.floor(Math.random() * 9);     // 0-8
+        } while (a <= b || (a + b) >= 10);
+
+        captchaSol = a + b;
+        document.getElementById('math-q').innerText = `${a} + ${b} = ?`;
+    }
+
+    function checkCaptcha() {
+        const userAns = parseInt(document.getElementById('math-a').value);
+        if(userAns === captchaSol) {
+            document.getElementById('captcha-container').style.display = 'none';
+            document.getElementById('contact-result').style.display = 'block';
+            
+            const phone = DATA.contact;
+            const link = document.getElementById('real-phone');
+            link.innerText = phone;
+            link.href = "tel:" + phone.replace(/[^0-9]/g, '');
+        } else {
+            document.getElementById('captcha-error').style.display = 'block';
+            initCaptcha(); // Resetuj przy błędzie
+            document.getElementById('math-a').value = '';
+        }
+    }
+
+    // --- LOGIKA KALENDARZA ---
+    function renderCalendar() {
+        const grid = document.getElementById('calendar-grid');
+        grid.innerHTML = '';
+        const y = currentDate.getFullYear();
+        const m = currentDate.getMonth();
+        
+        const monthNames = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"];
+        document.getElementById('month-year').innerText = `${monthNames[m]} ${y}`;
+
+        ['Pn','Wt','Śr','Cz','Pt','Sb','Nd'].forEach(d => {
+            grid.innerHTML += `<div class="day-label">${d}</div>`;
+        });
+
+        const firstDay = new Date(y, m, 1).getDay() || 7; 
+        const daysInMonth = new Date(y, m+1, 0).getDate();
+
+        for(let i=1; i<firstDay; i++) grid.innerHTML += `<div></div>`;
+
+        for(let d=1; d<=daysInMonth; d++) {
+            const dateKey = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+            const dayData = DATA.calendar[dateKey] || {};
+            
+            let cls = 'day';
+            if(dayData.type === 'special') cls += ' special';
+            if(dayData.type === 'busy') cls += ' busy';
+            if(dayData.type === 'partial') cls += ' partial';
+
+            const el = document.createElement('div');
+            el.className = cls;
+            el.innerHTML = `<span class="day-num">${d}</span>`;
+            
+            // Jeśli dzień jest częściowo zajęty, pokaż modal
+            if(dayData.type === 'partial') {
+                el.onclick = () => showModal(dateKey, dayData.hours);
+            }
+            // Jeśli dzień jest wyjątkowy, też może coś wyświetlić (opcjonalne)
+            if(dayData.type === 'special') {
+                el.title = "Dzień wyjątkowy!";
+            }
+
+            grid.appendChild(el);
+        }
+    }
+
+    function showModal(date, hours) {
+        document.getElementById('m-date').innerText = "Terminy zajęte: " + date;
+        if(hours && hours.length > 0) {
+            hours.sort((a,b)=>a-b);
+            document.getElementById('m-hours').innerHTML = hours.map(h => 
+                `<span class="hour-badge">${h}:00 - ${parseInt(h)+1}:00</span>`
+            ).join('');
+        } else {
+            document.getElementById('m-hours').innerHTML = "Brak zarezerwowanych godzin.";
+        }
+        document.getElementById('infoModal').style.display = 'flex';
+    }
+
+    function changeMonth(delta) {
+        currentDate.setMonth(currentDate.getMonth() + delta);
+        renderCalendar();
+    }
+
+    init();
+</script>
+</body>
+</html>
