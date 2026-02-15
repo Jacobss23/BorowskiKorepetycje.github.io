@@ -24,7 +24,7 @@
             color: var(--text);
             min-height: 100vh;
             padding-bottom: 60px;
-            -webkit-font-smoothing: antialiased; /* Wygładzanie czcionek jak w macOS */
+            -webkit-font-smoothing: antialiased;
         }
 
         .container { max-width: 720px; margin: 0 auto; padding: 20px; }
@@ -91,7 +91,7 @@
         
         .day { 
             height: 50px; 
-            border-radius: 14px; /* Bardziej zaokrąglone */
+            border-radius: 14px; 
             position: relative; 
             background: rgba(255,255,255,0.05); 
             transition: 0.2s;
@@ -101,7 +101,7 @@
         }
         .day-num { font-size: 0.9rem; }
         
-        /* Statusy Dni - kolory bardziej pastelowe/neonowe */
+        /* Statusy Dni */
         .day.special { background: rgba(255, 159, 67, 0.2); border-color: #ff9f43; color: #ff9f43; }
         
         .day.busy { 
@@ -139,7 +139,7 @@
             color: #000; 
             border: none; 
             padding: 12px 28px; 
-            border-radius: 30px; /* Pill shape */
+            border-radius: 30px; 
             font-weight: 600; 
             cursor: pointer; 
             margin-top: 10px; 
@@ -180,9 +180,9 @@
   "desc": "Jakub Borowski",
   "contact": "573 079 017",
   "prices": [
-    "1h [Szkoła podstawowa] - 40zł",
+    "1h (90 min) [Szkoła podstawowa] - 40zł",
     "1.5h (90 min) [Szkoła podstawowa] (90 min) 75zł",
-    "1h [Szkoła ponadpodstawowa] - 70zł",
+    "1h (90 min) [Szkoła ponadpodstawowa] - 70zł",
     "1.5h (90 min) [Szkoła ponadpodstawowa]  - 120zł",
     "Omówienie całego arkusza z egzaminu ósmoklasisty z poprzednich lat - 110zł",
     "Wykonanie zadania domowego z opisowym wytłumaczeniem - 25zł (bez spotkania online)"
@@ -229,22 +229,10 @@
     ]
   },
   "calendar": {
-    "2026-02-21": {
-      "type": "busy",
-      "hours": []
-    },
-    "2026-02-19": {
-      "type": "busy",
-      "hours": []
-    },
-    "2026-02-16": {
-      "type": "busy",
-      "hours": []
-    },
-    "2026-02-15": {
-      "type": "busy",
-      "hours": []
-    }
+    "2026-02-21": { "type": "busy", "hours": [] },
+    "2026-02-19": { "type": "busy", "hours": [] },
+    "2026-02-16": { "type": "busy", "hours": [] },
+    "2026-02-15": { "type": "busy", "hours": [] }
   }
 }
 </script>
@@ -314,6 +302,15 @@
         <div class="section-content"><ul id="v-rules"></ul></div>
     </div>
 
+    <div class="glass-card" id="card-about">
+        <div class="section-header" onclick="toggleCard('card-about')" style="justify-content: center; gap: 10px;">
+            👨‍🏫 O mnie
+        </div>
+        <div class="section-content" style="text-align: center;">
+            <p id="v-about" style="line-height:1.7; font-size: 1.05rem;"></p>
+        </div>
+    </div>
+
     <div class="glass-card">
         <div class="captcha-box" id="captcha-container">
             <h3>📞 Kontakt</h3>
@@ -339,11 +336,6 @@
                 Nie gwarantuję natychmiastowej odpowiedzi na Messenger!
             </p>
         </div>
-    </div>
-
-    <div class="glass-card" style="padding: 30px;">
-        <h3>👨‍🏫 O mnie</h3>
-        <p id="v-about" style="line-height:1.7; font-size: 1.05rem;"></p>
     </div>
 </div>
 
