@@ -17,7 +17,6 @@
         }
 
         body {
-            /* Apple System Font Stack (San Francisco) */
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
             margin: 0;
             background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
@@ -49,12 +48,13 @@
         h4 { color: var(--main); font-weight: 600; margin-bottom: 15px; }
         p { color: var(--text-dim); line-height: 1.6; font-size: 1rem; }
 
-        /* Akordeon */
+        /* Akordeon - ZMODYFIKOWANY DO CENTROWANIA */
         .section-header {
             padding: 24px; 
             cursor: pointer; 
             display: flex; 
-            justify-content: space-between;
+            justify-content: center; /* Wycentrowanie w poziomie */
+            gap: 15px; /* Odstęp między tekstem a strzałką */
             align-items: center; 
             background: rgba(255,255,255,0.02); 
             font-weight: 600; 
@@ -65,12 +65,19 @@
         .section-header:hover { background: rgba(255,255,255,0.06); }
         .section-header::after { content: '›'; font-size: 1.5rem; transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); line-height: 0; display: block; margin-top: -4px;}
         .glass-card.open .section-header::after { transform: rotate(90deg); }
-        .section-content { display: none; padding: 24px; border-top: 1px solid var(--glass-border); animation: slideDown 0.4s cubic-bezier(0.25, 1, 0.5, 1); }
+        
+        .section-content { 
+            display: none; 
+            padding: 24px; 
+            border-top: 1px solid var(--glass-border); 
+            animation: slideDown 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+            text-align: center; /* Wycentrowanie treści wewnątrz */
+        }
         .glass-card.open .section-content { display: block; }
 
         /* Tematy - Grid */
         .topics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 30px; }
-        .topic-col h4 { border-bottom: 1px solid rgba(0, 210, 211, 0.3); padding-bottom: 8px; margin-top: 0; }
+        .topic-col h4 { border-bottom: 1px solid rgba(0, 210, 211, 0.3); padding-bottom: 8px; margin-top: 0; text-align: center; }
         
         /* Kalendarz */
         .calendar-wrapper { padding: 24px; }
@@ -121,7 +128,7 @@
         }
         .day.partial:hover { transform: translateY(-2px); background: rgba(0, 210, 211, 0.3); box-shadow: 0 4px 12px rgba(0, 210, 211, 0.2); }
 
-        /* Badge Ostrzeżenia (NOWE) */
+        /* Badge Ostrzeżenia */
         .warning-box {
             background: rgba(255, 118, 117, 0.1);
             border: 1px solid rgba(255, 118, 117, 0.3);
@@ -178,11 +185,25 @@
         .hour-badge { display: inline-block; padding: 8px 14px; background: rgba(0, 210, 211, 0.15); color: var(--main); margin: 4px; border-radius: 10px; font-weight: 600; font-size: 0.9rem; border: 1px solid rgba(0, 210, 211, 0.3); }
 
         ul { list-style: none; padding: 0; }
-        li { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.95rem; color: var(--text-dim); }
+        li { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.95rem; color: var(--text-dim); text-align: center; }
         li:last-child { border: none; }
         
         a { color: var(--main); text-decoration: none; transition: 0.2s; }
         a:hover { text-decoration: underline; color: #fff; }
+
+        /* UKRYTY LINK GITHUB */
+        .repo-link {
+            position: fixed;
+            bottom: 5px;
+            right: 5px;
+            font-size: 10px;
+            color: #fff;
+            opacity: 0.03; /* Praktycznie niewidoczny */
+            text-decoration: none;
+            z-index: 9999;
+            transition: opacity 0.3s;
+        }
+        .repo-link:hover { opacity: 1; }
 
         @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -327,10 +348,10 @@
     </div>
 
     <div class="glass-card" id="card-about">
-        <div class="section-header" onclick="toggleCard('card-about')" style="justify-content: center; gap: 10px;">
+        <div class="section-header" onclick="toggleCard('card-about')">
             👨‍🏫 O mnie
         </div>
-        <div class="section-content" style="text-align: center;">
+        <div class="section-content">
             <p id="v-about" style="line-height:1.7; font-size: 1.05rem;"></p>
         </div>
     </div>
@@ -376,6 +397,8 @@
         <button class="main-btn" onclick="document.getElementById('infoModal').style.display='none'">Rozumiem</button>
     </div>
 </div>
+
+<a href="https://github.com/Jacobss23/BorowskiKorepetycje" target="_blank" class="repo-link">Source</a>
 
 <script>
     let DATA = {};
